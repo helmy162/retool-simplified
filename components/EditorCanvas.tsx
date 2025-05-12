@@ -37,26 +37,79 @@ export default function EditorCanvas({
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [showGrid, setShowGrid] = useState(false);
+  const [gridOpacity, setGridOpacity] = useState(0.7);
 
-  // Calculate column width
+  const containerPadding = [10, 10] as [number, number];
+  const margin = [10, 0] as [number, number];
+  const rowHeight = 30;
+
+  // Calculate column width and grid dimensions
   useEffect(() => {
-    if (canvasRef.current) {
-      const updateSize = () => {
+    const updateSize = () => {
+      if (canvasRef.current) {
         setCanvasSize({
-          width: canvasRef.current?.offsetWidth || 0,
-          height: canvasRef.current?.offsetHeight || 0,
+          width: canvasRef.current.offsetWidth || 0,
+          height: canvasRef.current.offsetHeight || 0,
         });
-      };
+      }
+    };
 
-      updateSize();
-      window.addEventListener("resize", updateSize);
-      return () => window.removeEventListener("resize", updateSize);
+    updateSize();
+
+    // Create a ResizeObserver to detect container size changes
+    const resizeObserver = new ResizeObserver(updateSize);
+    if (canvasRef.current) {
+      resizeObserver.observe(canvasRef.current);
     }
+
+    window.addEventListener("resize", updateSize);
+
+    return () => {
+      window.removeEventListener("resize", updateSize);
+      resizeObserver.disconnect();
+    };
   }, []);
 
-  const columnWidth = canvasSize.width
-    ? Math.floor((canvasSize.width - 20) / COLUMNS_COUNT)
-    : 0;
+  // Get the effective column width and row height
+  const getColumnWidth = () => {
+    if (!canvasSize.width) return 0;
+
+    // Account for container padding and margin between items
+    const availableWidth = canvasSize.width - 2 * containerPadding[0];
+
+    // Account for margins between columns
+    const totalMarginWidth = margin[0] * (COLUMNS_COUNT - 1);
+
+    // Calculate column width
+    return (availableWidth - totalMarginWidth) / COLUMNS_COUNT;
+  };
+
+  const columnWidth = getColumnWidth();
+
+  // Calculate the number of rows needed to fill the canvas height
+  const calculateTotalRows = () => {
+    if (!canvasSize.height) return 100; // Default to a large number if height not available
+
+    // Account for container padding
+    const availableHeight = canvasSize.height - 2 * containerPadding[1];
+
+    // Calculate number of rows (plus extra to ensure we cover scrollable area)
+    // Add 10 extra rows to ensure coverage when scrolling
+    let rowCount = Math.ceil(availableHeight / (rowHeight + margin[1])) + 10;
+
+    // Get the maximum Y position + height from components
+    if (components.length > 0) {
+      const maxYPosition = Math.max(
+        ...components.map((c) => c.position.y + c.position.h)
+      );
+      // Ensure we have enough rows to display all components plus some extra space
+      rowCount = Math.max(rowCount, maxYPosition + 10);
+    }
+
+    return rowCount;
+  };
+
+  // Track mouse position for grid highlights
 
   // Handle dropping component from sidebar
   const handleDrop = (e: React.DragEvent) => {
@@ -74,12 +127,19 @@ export default function EditorCanvas({
       const dropX = e.clientX - canvasRect.left;
       const dropY = e.clientY - canvasRect.top;
 
-      // Convert pixel coordinates to grid coordinates
-      const gridX = Math.floor(dropX / (columnWidth + 10)); // account for margin
-      const gridY = Math.floor(dropY / 70); // row height + margin
+      // Convert pixel coordinates to grid coordinates - account for container padding
+      const gridX = Math.floor(
+        (dropX - containerPadding[0]) / (columnWidth + margin[0])
+      );
+      const gridY = Math.floor(
+        (dropY - containerPadding[1]) / (rowHeight + margin[1])
+      );
 
       // Add component at the calculated position
-      const newComponent = addComponent(componentType, { x: gridX, y: gridY });
+      const newComponent = addComponent(componentType, {
+        x: Math.min(Math.max(0, gridX), COLUMNS_COUNT - 1),
+        y: Math.max(0, gridY),
+      });
 
       handleComponentSelect(newComponent.id);
     }
@@ -190,6 +250,141 @@ export default function EditorCanvas({
     }
   };
 
+  // Calculate grid lines
+  const renderGridLines = () => {
+    if (!showGrid || !canvasSize.width) return null;
+
+    const rowsCount = calculateTotalRows();
+
+    // Function to calculate actual pixel position for a grid line
+    const getColumnPosition = (colIndex: number) => {
+      return containerPadding[0] + colIndex * (columnWidth + margin[0]);
+    };
+
+    const getRowPosition = (rowIndex: number) => {
+      return containerPadding[1] + rowIndex * (rowHeight + margin[1]);
+    };
+
+    // Create column lines
+    const columnLines = Array.from({ length: COLUMNS_COUNT }).map((_, i) => {
+      const position = getColumnPosition(i);
+      return (
+        <div
+          key={`col-${i}`}
+          className="absolute bg-gradient-to-b from-primary/20 to-primary/40"
+          style={{
+            left: `${position}px`,
+            top: 0,
+            width: "1px",
+            height: `${rowsCount * (rowHeight + margin[1])}px`,
+            zIndex: 0,
+            opacity: i % 3 === 0 ? 0.8 : 0.4, // Make every 3rd line more prominent
+          }}
+        />
+      );
+    });
+
+    // Create row lines
+    const rowLines = Array.from({ length: rowsCount + 1 }).map((_, i) => {
+      const position = getRowPosition(i);
+      return (
+        <div
+          key={`row-${i}`}
+          className="absolute bg-gradient-to-r from-primary/20 to-primary/40"
+          style={{
+            left: 0,
+            top: `${position + 16}px`,
+            height: "1px",
+            width: `${canvasSize.width - containerPadding[0]}px`,
+            zIndex: 0,
+            opacity: i % 3 === 0 ? 0.8 : 0.4, // Make every 3rd line more prominent
+          }}
+        />
+      );
+    });
+
+    // Create grid cells (optional - for more visual appeal)
+    const gridCells = [];
+    for (let rowIdx = 0; rowIdx < rowsCount; rowIdx++) {
+      for (let colIdx = 0; colIdx < COLUMNS_COUNT; colIdx++) {
+        // Create cells only at certain positions for a dotted pattern effect
+        if ((rowIdx + colIdx) % 3 === 0) {
+          gridCells.push(
+            <div
+              key={`cell-${rowIdx}-${colIdx}`}
+              className="absolute rounded-full grid-cell-highlight"
+              style={{
+                left: `${getColumnPosition(colIdx) + columnWidth / 2}px`,
+                top: `${getRowPosition(rowIdx) + rowHeight / 2}px`,
+                width: "4px",
+                height: "4px",
+                transform: "translate(-50%, -50%)",
+                backgroundColor: "var(--primary)",
+                zIndex: 0,
+              }}
+            />
+          );
+        }
+      }
+    }
+
+    // Column coordinates (labels)
+    const columnCoordinates = Array.from({ length: COLUMNS_COUNT }).map(
+      (_, i) => (
+        <div
+          key={`col-label-${i}`}
+          className="absolute text-[10px] font-medium bg-white dark:bg-foreground/10 px-1 py-0.5 rounded-sm shadow-sm"
+          style={{
+            left: `${getColumnPosition(i)}px`,
+            top: "2px",
+            transform: "translateX(-50%)",
+            zIndex: 1,
+            color: "var(--primary)",
+            border: "1px solid var(--primary-light)",
+          }}
+        >
+          {i}
+        </div>
+      )
+    );
+
+    // Row coordinates (every 5th row)
+    const rowCoordinates = Array.from({
+      length: Math.ceil(rowsCount / 5) - 1,
+    }).map((_, i) => {
+      const rowIdx = (i + 1) * 5;
+      return (
+        <div
+          key={`row-label-${rowIdx}`}
+          className="absolute text-[10px] font-medium bg-white dark:bg-foreground/10 px-1 py-0.5 rounded-sm shadow-sm"
+          style={{
+            left: "2px",
+            top: `${getRowPosition(rowIdx)}px`,
+            transform: "translateY(0%)",
+            zIndex: 1,
+            color: "var(--primary)",
+            border: "1px solid var(--primary-light)",
+          }}
+        >
+          {rowIdx}
+        </div>
+      );
+    });
+
+    return (
+      <div
+        className="absolute inset-0 pointer-events-none z-0"
+        style={{ opacity: gridOpacity }}
+      >
+        {columnLines}
+        {rowLines}
+        {gridCells}
+        {columnCoordinates}
+        {rowCoordinates}
+      </div>
+    );
+  };
+
   return (
     <div className="flex h-full">
       <div className="flex flex-col flex-1">
@@ -207,12 +402,24 @@ export default function EditorCanvas({
               </span>
             )}
           </div>
-          <div>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center">
+              <input
+                type="range"
+                min="0.2"
+                max="1"
+                step="0.1"
+                value={gridOpacity}
+                onChange={(e) => setGridOpacity(parseFloat(e.target.value))}
+                className="w-20 h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer range-sm mr-2"
+                style={{ display: showGrid ? "block" : "none" }}
+              />
+            </div>
             <button
-              className={`text-xs px-2 py-1 rounded border flex items-center gap-1 ${
+              className={`text-xs px-3 py-1.5 rounded-md border flex items-center gap-1.5 transition-all ${
                 showGrid
-                  ? "bg-primary/10 text-primary border-primary/30"
-                  : "bg-white text-foreground-alt border-border hover:border-primary-light"
+                  ? "bg-primary text-white border-primary/30 shadow-sm"
+                  : "bg-white text-foreground-alt border-border hover:border-primary-light hover:bg-surface"
               }`}
               onClick={() => setShowGrid(!showGrid)}
             >
@@ -224,7 +431,7 @@ export default function EditorCanvas({
 
         <div
           ref={canvasRef}
-          className={`flex-1 overflow-auto  pb-20 relative ${
+          className={`flex-1 overflow-auto pb-20 relative ${
             isDraggingOver ? "bg-primary/5" : ""
           }`}
           onDrop={handleDrop}
@@ -233,16 +440,7 @@ export default function EditorCanvas({
           onClick={handleCanvasClick}
         >
           {/* Grid overlay */}
-          {showGrid && (
-            <div
-              className="absolute inset-0 pointer-events-none z-0"
-              style={{
-                backgroundImage:
-                  "linear-gradient(to right, rgba(59, 130, 246, 0.25) 1px, transparent 1px), linear-gradient(to bottom, rgba(59, 130, 246, 0.25) 1px, transparent 1px)",
-                backgroundSize: `${columnWidth + 2}px 70px`,
-              }}
-            />
-          )}
+          {renderGridLines()}
 
           <div ref={canvasContainerRef} className="p-4 h-full relative">
             {components.length === 0 ? (
@@ -282,12 +480,12 @@ export default function EditorCanvas({
                 layouts={layouts}
                 breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
                 cols={{ lg: 12, md: 12, sm: 12, xs: 12, xxs: 12 }}
-                rowHeight={30}
+                rowHeight={rowHeight}
                 onLayoutChange={handleLayoutChange}
                 isDraggable={true}
                 isResizable={true}
-                margin={[10, 0]}
-                containerPadding={[10, 10]}
+                margin={margin}
+                containerPadding={containerPadding}
                 compactType={null} // This disables automatic compaction
                 preventCollision={true} // Prevents components from overlapping
                 resizeHandles={["se", "sw", "ne", "nw", "e", "w", "s", "n"]}
