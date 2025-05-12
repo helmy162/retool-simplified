@@ -13,7 +13,7 @@ const ResponsiveGridLayout = WidthProvider(Responsive);
 
 interface EditorCanvasProps {
   components: IComponent[];
-  updateComponent: (id: string, updates: Partial<any>) => void;
+  updateComponent: (id: string, updates: Partial<IComponent>) => void;
   removeComponent: (id: string) => void;
   addComponent: (
     type: ComponentType,

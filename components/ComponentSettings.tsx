@@ -15,7 +15,7 @@ import { IComponent } from "@/types";
 
 interface ComponentSettingsProps {
   component: IComponent | null;
-  updateComponent: (id: string, updates: Partial<any>) => void;
+  updateComponent: (id: string, updates: Partial<IComponent>) => void;
   removeComponent: (id: string) => void;
 }
 
