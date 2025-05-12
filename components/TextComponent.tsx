@@ -63,7 +63,7 @@ export default function TextComponent({
     }
   };
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handleMouseDown = () => {
     onSelect(id);
   };
 

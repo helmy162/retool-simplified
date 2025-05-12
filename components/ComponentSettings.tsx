@@ -10,7 +10,6 @@ import {
   Settings,
   ChevronRight,
   ChevronLeft,
-  X,
 } from "lucide-react";
 import { IComponent } from "@/types";
 

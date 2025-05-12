@@ -21,6 +21,8 @@ interface EditorCanvasProps {
   ) => IComponent;
 }
 
+const COLUMNS_COUNT = 12; // Default number of columns
+
 export default function EditorCanvas({
   components,
   updateComponent,
@@ -33,7 +35,6 @@ export default function EditorCanvas({
   const canvasRef = useRef<HTMLDivElement>(null);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
-  const [columnsCount, setColumnsCount] = useState(12);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [showGrid, setShowGrid] = useState(false);
 
@@ -54,7 +55,7 @@ export default function EditorCanvas({
   }, []);
 
   const columnWidth = canvasSize.width
-    ? Math.floor((canvasSize.width - 20) / columnsCount)
+    ? Math.floor((canvasSize.width - 20) / COLUMNS_COUNT)
     : 0;
 
   // Handle dropping component from sidebar
@@ -63,7 +64,9 @@ export default function EditorCanvas({
     setIsDraggingOver(false);
 
     // Get the dropped component type
-    const componentType = e.dataTransfer.getData("component-type") as ComponentType;
+    const componentType = e.dataTransfer.getData(
+      "component-type"
+    ) as ComponentType;
 
     if (componentType && canvasRef.current) {
       // Calculate position in grid coordinates
@@ -91,7 +94,7 @@ export default function EditorCanvas({
     }
   };
 
-  const handleDragLeave = (e: React.DragEvent) => {
+  const handleDragLeave = () => {
     setIsDraggingOver(false);
   };
 
