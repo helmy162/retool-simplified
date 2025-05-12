@@ -1,103 +1,146 @@
-import Image from "next/image";
+"use client";
+
+import React, { useState, useCallback, useEffect } from "react";
+import { v4 as uuidv4 } from "uuid";
+import Header from "@/components/Header";
+import ComponentSidebar from "@/components/ComponentSidebar";
+import EditorCanvas from "@/components/EditorCanvas";
+import PreviewMode from "@/components/PreviewMode";
+import { toast } from "react-toastify";
+import { DESIGN_COMPONENTS } from "@/lib/sample_design";
+import { ComponentType, IComponent } from "@/types";
+
+const LOCAL_STORAGE_KEY = "retool-components";
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
+  const [components, setComponents] = useState<IComponent[]>(DESIGN_COMPONENTS);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+  // Load components from localStorage on initial load
+  useEffect(() => {
+    const savedComponents = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (savedComponents) {
+      try {
+        setComponents(JSON.parse(savedComponents));
+      } catch (e) {
+        console.error("Failed to load saved components:", e);
+      }
+    }
+  }, []);
+
+  const saveComponents = useCallback(() => {
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(components));
+      toast.success("Layout saved successfully!");
+    } catch (e) {
+      console.error("Failed to save components:", e);
+      toast.error("Failed to save layout. Please try again.");
+    }
+  }, [components]);
+
+  const togglePreviewMode = useCallback(() => {
+    setIsPreviewMode(!isPreviewMode);
+  }, [isPreviewMode]);
+
+  const addComponent = useCallback(
+    (type: ComponentType, position?: { x: number; y: number }) => {
+      const newId = uuidv4();
+
+      // Default content based on component type
+      const defaultContent =
+        type === "text"
+          ? "# Hello World\n\nThis is editable text. You can use **markdown** formatting."
+          : "https://placehold.co/600x400/f8fafc/334155?text=Image";
+
+      // Use provided position or default to top-left or the first available space
+      const x = position?.x ?? 0;
+      const y = position?.y ?? 0;
+
+      // Create the new component
+      const newComponent: IComponent = {
+        id: newId,
+        type,
+        content: defaultContent,
+        position: {
+          x: x, // Use specified position or default
+          y: y, // Use specified position or default
+          w: 6, // Default width
+          h: 12, // Default height
+        },
+        useMarkdown: type === "text" ? true : undefined,
+      };
+
+      setComponents([...components, newComponent]);
+      toast.success(`New ${type} component added successfully`);
+
+      return newComponent;
+    },
+    [components]
+  );
+
+  const updateComponent = useCallback(
+    (id: string, updates: Partial<IComponent>) => {
+      setComponents(
+        components.map((component) =>
+          component.id === id ? { ...component, ...updates } : component
+        )
+      );
+    },
+    [components]
+  );
+
+  const removeComponent = useCallback(
+    (id: string) => {
+      setComponents(components.filter((component) => component.id !== id));
+      toast.success("Component removed successfully!");
+    },
+    [components]
+  );
+
+  // Handle keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Save with Ctrl+S or Cmd+S
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault();
+        saveComponents();
+      }
+
+      // Toggle preview mode with Ctrl+P or Cmd+P
+      if ((e.ctrlKey || e.metaKey) && e.key === "p") {
+        e.preventDefault();
+        togglePreviewMode();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [saveComponents, togglePreviewMode]);
+
+  return (
+    <div className="flex flex-col h-screen">
+      <Header
+        isPreviewMode={isPreviewMode}
+        togglePreviewMode={togglePreviewMode}
+        onSave={saveComponents}
+      />
+
+      <div className="flex flex-1 overflow-hidden">
+        {!isPreviewMode && <ComponentSidebar onAddComponent={addComponent} />}
+
+        <div className="flex-1 overflow-auto relative">
+          {isPreviewMode ? (
+            <PreviewMode components={components} />
+          ) : (
+            <EditorCanvas
+              components={components}
+              updateComponent={updateComponent}
+              removeComponent={removeComponent}
+              addComponent={addComponent}
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+          )}
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      </div>
     </div>
   );
 }
