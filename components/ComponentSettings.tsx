@@ -25,6 +25,16 @@ export default function ComponentSettings({
   removeComponent,
 }: ComponentSettingsProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [widthInput, setWidthInput] = useState<string>("");
+  const [heightInput, setHeightInput] = useState<string>("");
+
+  // Update local input states when component changes
+  React.useEffect(() => {
+    if (component) {
+      setWidthInput(component.position.w.toString());
+      setHeightInput(component.position.h.toString());
+    }
+  }, [component?.id, component?.position.w, component?.position.h]);
 
   const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     if (component) {
@@ -52,6 +62,52 @@ export default function ComponentSettings({
         [dimension]: limitedValue,
       },
     });
+
+    // Update the corresponding input state
+    if (dimension === "w") {
+      setWidthInput(limitedValue.toString());
+    } else {
+      setHeightInput(limitedValue.toString());
+    }
+  };
+
+  const handleInputChange = (dimension: "w" | "h", value: string) => {
+    // Update the input field as user types
+    if (dimension === "w") {
+      setWidthInput(value);
+    } else {
+      setHeightInput(value);
+    }
+  };
+
+  const handleInputBlur = (dimension: "w" | "h", value: string) => {
+    if (!component) return;
+
+    // Parse the input value
+    const numValue = parseInt(value, 10);
+
+    // Validate and apply the change if valid
+    if (!isNaN(numValue)) {
+      handleSizeChange(dimension, numValue);
+    } else {
+      // Reset to current value if invalid
+      if (dimension === "w") {
+        setWidthInput(component.position.w.toString());
+      } else {
+        setHeightInput(component.position.h.toString());
+      }
+    }
+  };
+
+  const handleInputKeyDown = (
+    e: React.KeyboardEvent,
+    dimension: "w" | "h",
+    value: string
+  ) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleInputBlur(dimension, value);
+    }
   };
 
   const toggleCollapse = () => {
@@ -146,9 +202,17 @@ export default function ComponentSettings({
                 >
                   -
                 </button>
-                <div className="h-8 w-12 flex items-center justify-center border-t border-b border-border bg-white">
-                  {component?.position.w || "-"}
-                </div>
+                <input
+                  type="text"
+                  value={widthInput}
+                  onChange={(e) => handleInputChange("w", e.target.value)}
+                  onBlur={(e) => handleInputBlur("w", e.target.value)}
+                  onKeyDown={(e) =>
+                    handleInputKeyDown(e, "w", e.currentTarget.value)
+                  }
+                  className="h-8 w-12 border-t border-b border-border bg-white text-center text-foreground focus:outline-none focus:border-primary focus:z-10"
+                  disabled={!component}
+                />
                 <button
                   className="w-8 h-8 flex items-center justify-center rounded-r-md border border-border bg-white hover:bg-surface-hover disabled:opacity-50 transition-colors"
                   onClick={() =>
@@ -179,9 +243,17 @@ export default function ComponentSettings({
                 >
                   -
                 </button>
-                <div className="h-8 w-12 flex items-center justify-center border-t border-b border-border bg-white">
-                  {component?.position.h || "-"}
-                </div>
+                <input
+                  type="text"
+                  value={heightInput}
+                  onChange={(e) => handleInputChange("h", e.target.value)}
+                  onBlur={(e) => handleInputBlur("h", e.target.value)}
+                  onKeyDown={(e) =>
+                    handleInputKeyDown(e, "h", e.currentTarget.value)
+                  }
+                  className="h-8 w-12 border-t border-b border-border bg-white text-center text-foreground focus:outline-none focus:border-primary focus:z-10"
+                  disabled={!component}
+                />
                 <button
                   className="w-8 h-8 flex items-center justify-center rounded-r-md border border-border bg-white hover:bg-surface-hover disabled:opacity-50 transition-colors"
                   onClick={() =>
